@@ -1,0 +1,766 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cascade promo scene</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  #m { display: block; width: 960px; height: 540px; }
+  #g { position: absolute; left: -5000px; top: 0; width: 600px; }
+</style>
+</head>
+<body>
+<canvas id="m" width="1920" height="1080"></canvas>
+<canvas id="g"></canvas>
+<script src="../assets/js/cascade.js"></script>
+<script src="stage.js"></script>
+<script>
+/*
+ * Cascade promo, 1920x1080 at 60 fps, rendered frame by frame (see render.py).
+ * Everything is a pure function of the frame time, except the game simulation, which is stepped forward
+ * deterministically (seeded random numbers, fixed 1/120 s steps) and is the same for both languages.
+ * Open scene.html?lang=uk or ?lang=en; window.renderFrame(i) returns a JPEG of frame i (call it in order).
+ */
+(() => {
+  'use strict';
+  const C = window.Cascade;
+  const W = 1920, H = 1080, FPS = 60, DUR = 28.5;
+  const LANG = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'uk';
+  const SEED = 136;
+  const STEP = 1 / 120;
+
+  // ------------------------------------------------------------------ copy (strings match the landing page)
+
+  const ukBlocks = (n) => {
+    const m10 = n % 10, m100 = n % 100;
+    const word = m10 === 1 && m100 !== 11 ? 'блок' : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? 'блоки' : 'блоків';
+    return `${word} за один хід`;
+  };
+  const TEXT = {
+    uk: {
+      hook: ['Цілься.', 'Запускай.', 'Ламай усе.'],
+      score: 'Очки',
+      words: ['Ламай', 'Відбивай', 'Ланцюжки'],
+      comboTitle: ['Чим довший ланцюжок,', 'тим дорожчий кожен блок'],
+      comboTitles: ['Непогано!', 'Чудово!', 'Неймовірно!', 'Шалено!', 'ЛЕГЕНДАРНО!'],
+      blocksTurn: ukBlocks,
+      blocksBanner: (n) => `${n} блок${n % 10 === 1 && n % 100 !== 11 ? '' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'и' : 'ів'} знищено`,
+      points: 'очок',
+      bonusTitle: 'Що лежить на полі',
+      bonuses: [['Кулька', 'Ще одна кулька з наступного ходу.'], ['Монета', 'Іде до гаманця. Витратиш у магазині.'], ['Лазер', 'Б’є по всіх блоках ряду або стовпця.'], ['Бомба', 'Руйнує блоки в зоні 3×3.']],
+      styleTitle: 'Зроби поле своїм',
+      styleSub: '4 теми · 5 стилів блоків · 5 стилів кульок',
+      themes: ['Неон', 'Океан', 'Захід сонця', 'Матриця'],
+      levels: 'рівнів',
+      endless: 'і нескінченний режим',
+      sub: 'Ламай і відбивай',
+      badge: ['Завантажити в', 'Google Play'],
+      free: 'Безкоштовно · Android 7.0+',
+    },
+    en: {
+      hook: ['Aim.', 'Launch.', 'Break everything.'],
+      score: 'Score',
+      words: ['Break', 'Bounce', 'Chain'],
+      comboTitle: ['The longer the chain,', 'the more each block is worth'],
+      comboTitles: ['Nice!', 'Great!', 'Awesome!', 'Incredible!', 'LEGENDARY!'],
+      blocksTurn: (n) => (n === 1 ? 'block in one turn' : 'blocks in one turn'),
+      blocksBanner: (n) => `${n} ${n === 1 ? 'block' : 'blocks'} destroyed`,
+      points: 'points',
+      bonusTitle: 'What lies on the field',
+      bonuses: [['Ball', 'One more ball from the next turn.'], ['Coin', 'Goes to your wallet. Spend it in the shop.'], ['Laser', 'Hits every block in a row or a column.'], ['Bomb', 'Destroys blocks in a 3×3 area.']],
+      styleTitle: 'Make the field yours',
+      styleSub: '4 themes · 5 block styles · 5 ball styles',
+      themes: ['Neon', 'Ocean', 'Sunset', 'Matrix'],
+      levels: 'levels',
+      endless: 'and endless mode',
+      sub: 'Break & Bounce',
+      badge: ['Get it on', 'Google Play'],
+      free: 'Free · Android 7.0+',
+    },
+  };
+  const T = TEXT[LANG];
+
+  // ------------------------------------------------------------------ timeline
+
+  /** Scene boundaries in video seconds. */
+  const S = { hook: 0, play: 2.1, combo: 7.3, bonus: 12.7, style: 16.3, numbers: 20.3, finale: 22.4 };
+  const SLAMS = [0.45, 0.95, 1.45];
+  const POPS = [12.9, 13.55, 14.2, 14.85];
+  const THEME_AT = [16.3, 17.3, 18.3, 19.3];
+  const LOOKS = [['neon', 'rounded'], ['ocean', 'gem'], ['sunset', 'bubble'], ['matrix', 'outline']];
+  const BADGE_AT = 24.0;
+
+  /** Video time -> game time keyframes. The game plays at normal speed (about 1.1 to 1.5x) through the turns and is
+   *  fast-forwarded through the waits between them, so there is always something happening. */
+  const MAP = [
+    [0, 0.2], [2.1, 2.58], [2.9, 3.68], [3.3, 5.35], [4.4, 6.94], [4.8, 8.61], [6.1, 10.46], [7.4, 12.12],
+    [11.6, 17.9], [12.7, 21.13], [13.7, 22.48], [14.2, 24.15], [15.1, 25.28], [15.6, 26.95], [17.1, 28.8],
+    [17.6, 30.47], [19.0, 32.18], [30, 45],
+  ];
+  function interp(table, x, ix, iy) {
+    if (x <= table[0][ix]) return table[0][iy];
+    for (let i = 1; i < table.length; i++) {
+      if (x <= table[i][ix]) {
+        const a = table[i - 1], b = table[i];
+        return a[iy] + ((x - a[ix]) / (b[ix] - a[ix])) * (b[iy] - a[iy]);
+      }
+    }
+    return table[table.length - 1][iy];
+  }
+  const vToG = (v) => interp(MAP, v, 0, 1);
+  const gToV = (g) => interp(MAP, g, 1, 0);
+
+  // ------------------------------------------------------------------ helpers
+
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+  const eo3 = (t) => 1 - Math.pow(1 - clamp01(t), 3);
+  const eoExp = (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * clamp01(t)));
+  const eoBack = (t) => { t = clamp01(t); const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  const hash = (i) => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+  const col = (c, a = 1) => C.rgba(c, a);
+  const fmt = (n) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+  const MONO = '"JetBrains Mono", monospace';
+  const SANS = 'Inter, sans-serif';
+
+  function mulberry(a) {
+    return () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const simRng = mulberry(SEED);
+  const drawRng = mulberry(7);
+
+  const mc = document.getElementById('m');
+  const ctx = mc.getContext('2d');
+  const gc = document.getElementById('g');
+
+  function txt(s, x, y, o = {}) {
+    const { size = 80, weight = 800, family = SANS, color = '#fff', align = 'left', alpha = 1, glow = 0, glowColor = color } = o;
+    ctx.save();
+    ctx.font = `${weight} ${size}px ${family}`;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha *= alpha;
+    if (glow) { ctx.shadowColor = glowColor; ctx.shadowBlur = glow; }
+    ctx.fillStyle = color;
+    ctx.fillText(s, x, y);
+    ctx.restore();
+  }
+  function measure(s, size, weight = 800, family = SANS) {
+    ctx.save(); ctx.font = `${weight} ${size}px ${family}`; const w = ctx.measureText(s).width; ctx.restore(); return w;
+  }
+  function fit(s, maxW, size, weight = 800, family = SANS) {
+    const w = measure(s, size, weight, family);
+    return w > maxW ? (size * maxW) / w : size;
+  }
+  function rr(x, y, w, h, r) { C.roundRect(ctx, x, y, w, h, r); }
+
+  // ------------------------------------------------------------------ game
+
+  let G, st, icon;
+  let stepsDone = 0, setTurn = 0;
+  let curLook = '';
+  const last = { break: -1e9, bounce: -1e9, combo: -1e9, hit: -1e9 };
+  const cues = [];
+  let turnPoints = 0, stageVs = [], comboFlashV = -1e9, comboFlashTier = 0;
+
+  function onGameEvent(type, data) {
+    const v = gToV(st.time);
+    if (type === 'break') {
+      last.break = v;
+      if (data.combo === 1) turnPoints = 0;
+      turnPoints += data.points;
+      cues.push({ v, k: 'break', n: data.combo });
+    } else if (type === 'bounce') {
+      last.bounce = v;
+      cues.push({ v, k: 'bounce' });
+    } else if (type === 'combo') {
+      last.combo = v;
+      comboFlashV = v; comboFlashTier = data.tier;
+      cues.push({ v, k: 'combo', n: data.tier });
+    } else if (type === 'hit') {
+      last.hit = v;
+    }
+  }
+
+  function advanceTo(v) {
+    const target = Math.floor(vToG(v) / STEP + 1e-9);
+    while (stepsDone < target) {
+      if (st.phase === 'ready' && setTurn !== st.turn) {
+        setTurn = st.turn;
+        PromoStage.onReady(st);
+        if (st.turn === 4 || st.turn === 5) { const sv = gToV(st.time); stageVs.push(sv); cues.push({ v: sv, k: 'stage' }); }
+      }
+      Math.random = simRng;
+      G._step(STEP);
+      stepsDone++;
+    }
+  }
+  function drawGame() { Math.random = drawRng; G._draw(); Math.random = simRng; }
+
+  function applyLook(v) {
+    let idx = 0;
+    for (let i = 0; i < THEME_AT.length; i++) if (v >= THEME_AT[i]) idx = i;
+    if (v >= S.numbers) idx = 0;
+    const key = LOOKS[idx].join('/');
+    if (key !== curLook) {
+      curLook = key;
+      Math.random = drawRng;
+      G.setPalette(LOOKS[idx][0]);
+      G.setSkin(LOOKS[idx][1]);
+      Math.random = simRng;
+    }
+  }
+  /** Palette used by the backdrop and text; crossfades when the theme changes. */
+  function look(v) {
+    let idx = 0, t0 = -10;
+    for (let i = 1; i < THEME_AT.length; i++) if (v >= THEME_AT[i]) { idx = i; t0 = THEME_AT[i]; }
+    let nextIdx = idx, prevIdx = idx, k = 1;
+    if (v >= S.numbers) { prevIdx = 3; nextIdx = 0; k = ss(S.numbers, S.numbers + 0.3, v); }
+    else if (t0 > 0) { prevIdx = idx - 1; nextIdx = idx; k = ss(t0, t0 + 0.3, v); }
+    const a = C.PALETTES[LOOKS[prevIdx][0]], b = C.PALETTES[LOOKS[nextIdx][0]];
+    const m = (x, y) => C.mix(x, y, k);
+    return {
+      bg: m(a.background, b.background), field: m(a.field, b.field), line: m(a.fieldLine, b.fieldLine),
+      accent: m(a.accent, b.accent), surface: m(a.surface, b.surface), text: m(a.hudText, b.hudText),
+      blocks: [0, 1, 2, 3].map((i) => m(a.blockColors[i], b.blockColors[i])),
+      item: m(a.itemBall, b.itemBall), coin: b.coin, coinInner: b.coinInner, laser: b.laser, bomb: b.bomb, spark: b.bombSpark,
+    };
+  }
+
+  const act = (key, v, decay) => Math.exp(-Math.max(0, v - last[key]) / decay);
+
+  // ------------------------------------------------------------------ backdrop
+
+  const beatKick = (v) => (v < S.play ? 0 : Math.exp(-((v * 2) % 1) * 5));
+
+  function drawBackground(v, P, fx) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, col(P.bg));
+    g.addColorStop(1, col(C.mix(P.bg, [0, 0, 0], 0.5)));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    const kick = beatKick(v);
+    let r = ctx.createRadialGradient(fx, 540, 0, fx, 540, 900);
+    r.addColorStop(0, col(P.accent, 0.26 + 0.1 * kick));
+    r.addColorStop(1, col(P.accent, 0));
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    r = ctx.createRadialGradient(240, 1000, 0, 240, 1000, 760);
+    r.addColorStop(0, col(P.blocks[2], 0.14));
+    r.addColorStop(1, col(P.blocks[2], 0));
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+
+    // perspective floor
+    const hz = 640;
+    ctx.save();
+    ctx.lineWidth = 2;
+    for (let k = -14; k <= 14; k++) {
+      ctx.strokeStyle = col(P.accent, 0.16 + 0.06 * kick);
+      ctx.beginPath(); ctx.moveTo(W / 2 + k * 46, hz); ctx.lineTo(W / 2 + k * 230, H); ctx.stroke();
+    }
+    for (let j = 0; j < 10; j++) {
+      const z = (j / 10 + v * 0.3) % 1;
+      const y = hz + (H - hz) * Math.pow(z, 2.2);
+      ctx.strokeStyle = col(P.accent, 0.05 + 0.2 * z);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // falling blocks
+    for (let i = 0; i < 38; i++) {
+      const sz = 12 + hash(i + 3) * 30;
+      const x = hash(i) * W;
+      const speed = 40 + hash(i + 9) * 110;
+      const y = ((hash(i + 5) * (H + 200) + v * speed) % (H + 200)) - 100;
+      ctx.save();
+      ctx.globalAlpha = 0.07 + hash(i + 11) * 0.1;
+      ctx.translate(x, y); ctx.rotate(v * (hash(i + 2) - 0.5) * 1.2 + i);
+      ctx.fillStyle = col(P.blocks[i % 4]);
+      rr(-sz / 2, -sz / 2, sz, sz, sz * 0.2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ------------------------------------------------------------------ field
+
+  const FW = 560, FH = (FW * (C.ROWS + 0.6)) / C.COLS, FX = 1440;
+  function fieldX(v) {
+    if (v < S.numbers) return lerp(2400, FX, eoBack((v - 0.12) / 0.85));
+    const p = ss(S.numbers, S.numbers + 0.6, v);
+    return lerp(FX, 2400, p * p);
+  }
+
+  function drawField(v, P) {
+    const fx = fieldX(v);
+    if (fx > 2300 || v >= S.numbers + 0.7) return;
+    drawGame();
+    const pulse = 1 + 0.012 * beatKick(v);
+    ctx.save();
+    ctx.translate(fx, 540); ctx.scale(pulse, pulse);
+    ctx.shadowColor = col(P.accent, 0.6); ctx.shadowBlur = 70;
+    ctx.drawImage(gc, -FW / 2, -FH / 2, FW, FH);
+    ctx.shadowBlur = 0;
+    rr(-FW / 2, -FH / 2, FW, FH, 18);
+    ctx.strokeStyle = col(P.accent, 0.7); ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore();
+  }
+
+  // ------------------------------------------------------------------ scenes (left side)
+
+  function scene(v, a, b, fn, inDur = 0.4, outDur = 0.2) {
+    if (v < a || v >= b) return;
+    const l = v - a;
+    const pin = eo3(l / inDur);
+    ctx.save();
+    ctx.globalAlpha = Math.min(pin, 1 - ss(b - outDur, b, v));
+    ctx.translate((1 - pin) * -110, 0);
+    fn(l, v);
+    ctx.restore();
+  }
+
+  function drawHook(v, P) {
+    const cols = ['#4FC3F7', '#FF4081', '#FFD54F'];
+    const ys = [330, 560, 820];
+    const sizes = [190, 190, 220];
+    const exit = ss(1.9, 2.1, v);
+    for (let i = 0; i < 3; i++) {
+      const dt = v - SLAMS[i];
+      if (dt < 0) continue;
+      const s = T.hook[i];
+      const size = fit(s, 960, sizes[i]);
+      const w = measure(s, size);
+      const p = eoExp(dt / 0.16);
+      const sc = lerp(2.3, 1, p);
+      const x = 120 - exit * 380;
+      ctx.save();
+      ctx.globalAlpha = clamp01(dt / 0.05) * (1 - exit);
+      ctx.translate(x + w / 2, ys[i] - size * 0.35);
+      ctx.scale(sc, sc);
+      ctx.translate(-w / 2, size * 0.35);
+      if (dt < 0.35) {
+        const d = 16 * Math.exp(-dt * 9);
+        ctx.globalCompositeOperation = 'lighter';
+        txt(s, -d, 0, { size, color: 'rgba(0,255,255,0.7)' });
+        txt(s, d, 0, { size, color: 'rgba(255,0,110,0.7)' });
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      txt(s, 0, 0, { size, color: cols[i], glow: 40 });
+      ctx.fillStyle = cols[i];
+      ctx.globalAlpha *= 0.9;
+      ctx.fillRect(0, size * 0.1, w * eo3(dt / 0.35), 9);
+      ctx.restore();
+    }
+  }
+
+  function drawPlay(l, v, P) {
+    txt(T.score.toUpperCase(), 124, 218, { size: 30, weight: 700, family: MONO, color: col(P.text, 0.6) });
+    txt(fmt(st.score), 118, 360, { size: 170, family: MONO, color: C.scoreColor(st.score, st.time), glow: 30 });
+    const idx = [0, 2, 3];
+    const kinds = ['break', 'bounce', 'combo'];
+    for (let i = 0; i < 3; i++) {
+      let a = act(kinds[i], v, 0.28);
+      if (i === 2 && st.combo >= 3 && st.phase === 'firing') a = Math.max(a, 0.9);
+      const x = 120 + 44 * a;
+      txt(T.words[i], x, 560 + i * 150, { size: 124, color: a > 0.15 ? col(P.blocks[idx[i]]) : col(P.text, 0.6), alpha: 0.55 + 0.45 * a, glow: 38 * a, glowColor: col(P.blocks[idx[i]]) });
+      ctx.fillStyle = col(P.blocks[idx[i]], 0.4 + 0.6 * a);
+      ctx.fillRect(60, 560 + i * 150 - 92, 8, 92);
+    }
+  }
+
+  function drawCombo(l, v, P) {
+    txt(T.comboTitle[0], 120, 170, { size: 50, weight: 600, color: col(P.text, 0.8) });
+    txt(T.comboTitle[1], 120, 232, { size: 50, weight: 600, color: col(P.text, 0.8) });
+    const n = st.combo;
+    if (n < 1) return;
+    const tier = C.tierForCombo(n);
+    const color = tier > 0 ? col(C.epicColor(tier, st.time)) : '#ffffff';
+    const punch = 1 + 0.1 * act('break', v, 0.07) + 0.18 * Math.exp(-Math.max(0, v - comboFlashV) * 7);
+    const s = `×${n}`;
+    const size = fit(s, 880, 340, 800, MONO);
+    ctx.save();
+    ctx.translate(120, 600);
+    ctx.scale(punch, punch);
+    txt(s, 0, 0, { size, family: MONO, color, glow: 40 + 40 * tier / 5, glowColor: color });
+    ctx.restore();
+    txt(T.blocksTurn(n), 124, 688, { size: 56, weight: 600, color: col(P.text, 0.85) });
+    txt(`10 × ${n} = ${fmt(10 * Math.min(n, 100))}`, 124, 790, { size: 72, family: MONO, color: col(P.coin) });
+    txt(`+${fmt(turnPoints)} ${T.points}`, 124, 896, { size: 72, family: MONO, color: C.scoreColor(st.score, st.time), glow: 24 });
+  }
+
+  function drawBonusIcon(kind, cx, cy, size, t, P) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    const u = size / 96;
+    ctx.scale(u, u);
+    ctx.translate(-48, -48);
+    if (kind === 0) {
+      const r = 22 + 3 * Math.sin(t * 4);
+      ctx.strokeStyle = col(P.item); ctx.lineWidth = 5; ctx.shadowColor = col(P.item, 0.8); ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(48, 52, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(48, 52, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      txt('+1', 48, 24 - 4 * Math.abs(Math.sin(t * 3)), { size: 18, family: MONO, color: col(P.item), align: 'center' });
+    } else if (kind === 1) {
+      const sx = Math.max(0.14, Math.abs(Math.cos(t * 3)));
+      ctx.shadowColor = col(P.coin, 0.8); ctx.shadowBlur = 14;
+      ctx.fillStyle = col(P.coin);
+      ctx.beginPath(); ctx.ellipse(48, 48, 26 * sx, 26, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = col(P.coinInner); ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.ellipse(48, 48, 16 * sx, 16, 0, 0, Math.PI * 2); ctx.stroke();
+    } else if (kind === 2) {
+      const p = (t * 0.9) % 1;
+      const beamX = p * 112 - 8;
+      for (let i = 0; i < 5; i++) {
+        const x = 6 + i * 18;
+        const gone = beamX > x + 8;
+        ctx.globalAlpha = gone ? 0.18 : 1;
+        ctx.fillStyle = col(P.blocks[i % 4]);
+        rr(x, 36, 16, 16, 3); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = col(P.laser, 0.9); ctx.shadowBlur = 16;
+      ctx.fillStyle = col(P.laser);
+      ctx.fillRect(0, 42, Math.max(0, Math.min(96, beamX + 8)), 4);
+      ctx.beginPath(); ctx.arc(beamX + 8, 44, 5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const p = (t * 0.8) % 1;
+      const blast = ss(0.35, 0.75, p);
+      const cells = [[20, 20], [40, 20], [60, 20], [20, 40], [60, 40], [20, 60], [40, 60], [60, 60]];
+      cells.forEach(([x, y], i) => {
+        ctx.globalAlpha = blast > 0.55 ? Math.max(0, 1 - (blast - 0.55) * 4) * 0.9 + 0.1 : 1;
+        ctx.fillStyle = col(P.blocks[i % 4]);
+        rr(x, y, 16, 16, 3); ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      if (blast <= 0) {
+        ctx.fillStyle = col(P.bomb); ctx.beginPath(); ctx.arc(48, 49, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = col(P.spark); ctx.beginPath(); ctx.arc(54, 38 + Math.sin(t * 20), 3, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.strokeStyle = col(P.spark, 1 - blast); ctx.lineWidth = 6;
+        ctx.shadowColor = col(P.spark, 0.9); ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.arc(48, 48, 10 + blast * 36, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawBonus(l, v, P) {
+    txt(T.bonusTitle, 120, 170, { size: 72, color: '#fff', glow: 20, glowColor: col(P.accent) });
+    const cw = 450, ch = 290;
+    for (let i = 0; i < 4; i++) {
+      const dt = v - POPS[i];
+      if (dt < 0) continue;
+      const x = 120 + (i % 2) * (cw + 30), y = 230 + Math.floor(i / 2) * (ch + 30);
+      const sc = lerp(0.7, 1, eoBack(dt / 0.35));
+      ctx.save();
+      ctx.globalAlpha = clamp01(dt / 0.12);
+      ctx.translate(x + cw / 2, y + ch / 2); ctx.scale(sc, sc); ctx.translate(-cw / 2, -ch / 2);
+      rr(0, 0, cw, ch, 24);
+      ctx.fillStyle = col(P.surface, 0.72); ctx.fill();
+      ctx.strokeStyle = col(P.accent, 0.35 + 0.5 * Math.exp(-dt * 4)); ctx.lineWidth = 3; ctx.stroke();
+      drawBonusIcon(i, 110, 108, 150, dt, P);
+      txt(T.bonuses[i][0], 205, 100, { size: 56, color: '#fff' });
+      const words = T.bonuses[i][1].split(' ');
+      let line = '', yy = 205;
+      ctx.font = '400 27px Inter';
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > cw - 48 && line) { txt(line, 28, yy, { size: 27, weight: 400, color: col(P.text, 0.78) }); line = w; yy += 36; }
+        else line = test;
+      }
+      txt(line, 28, yy, { size: 27, weight: 400, color: col(P.text, 0.78) });
+      ctx.restore();
+    }
+  }
+
+  function drawStyle(l, v, P) {
+    txt(T.styleTitle, 120, 200, { size: fit(T.styleTitle, 960, 104), color: '#fff', glow: 24, glowColor: col(P.accent) });
+    txt(T.styleSub, 124, 270, { size: 34, weight: 600, color: col(P.text, 0.8) });
+    let idx = 0;
+    for (let i = 0; i < THEME_AT.length; i++) if (v >= THEME_AT[i]) idx = i;
+    const names = ['neon', 'ocean', 'sunset', 'matrix'];
+    for (let i = 0; i < 4; i++) {
+      const x = 120 + i * 240, y = 350, w = 220, h = 190;
+      const pal = C.PALETTES[names[i]];
+      const on = i === idx;
+      const k = on ? eoBack((v - THEME_AT[i]) / 0.3) : 0;
+      const sc = 1 + 0.08 * k;
+      ctx.save();
+      ctx.translate(x + w / 2, y + h / 2); ctx.scale(sc, sc); ctx.translate(-w / 2, -h / 2);
+      rr(0, 0, w, h, 20);
+      ctx.fillStyle = col(pal.field, on ? 0.95 : 0.55); ctx.fill();
+      ctx.strokeStyle = col(pal.accent, on ? 1 : 0.35); ctx.lineWidth = on ? 5 : 2;
+      ctx.shadowColor = col(pal.accent, on ? 0.9 : 0); ctx.shadowBlur = on ? 30 : 0;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      pal.blockColors.forEach((c, j) => { ctx.fillStyle = col(c); rr(24 + j * 48, 28, 40, 40, 8); ctx.fill(); });
+      txt(T.themes[i], w / 2, 138, { size: fit(T.themes[i], w - 28, 38), align: 'center', color: on ? '#fff' : col(pal.hudText, 0.7) });
+      ctx.restore();
+    }
+    const skins = ['rounded', 'sharp', 'outline', 'gem', 'bubble'];
+    const cur = LOOKS[idx][1];
+    skins.forEach((name, i) => {
+      const x = 120 + i * 190, y = 650, s = 150;
+      const on = name === cur;
+      const k = on ? eoBack((v - THEME_AT[idx]) / 0.3) : 0;
+      ctx.save();
+      ctx.translate(x + s / 2, y + s / 2); ctx.scale(1 + 0.1 * k, 1 + 0.1 * k); ctx.translate(-s / 2, -s / 2);
+      rr(0, 0, s, s, 18);
+      ctx.fillStyle = col(P.field, 0.7); ctx.fill();
+      ctx.strokeStyle = col(P.accent, on ? 1 : 0.25); ctx.lineWidth = on ? 4 : 2; ctx.stroke();
+      ctx.globalAlpha = on ? 1 : 0.6;
+      C.SKINS[name](ctx, 30, 30, 90, 90, C.blockColor(C.PALETTES[LOOKS[idx][0]], 0.35 + i * 0.12));
+      ctx.restore();
+    });
+  }
+
+  // ------------------------------------------------------------------ numbers and finale
+
+  function confetti(v, t0, ox, oy, n, seed, P) {
+    const dt = v - t0;
+    if (dt < 0 || dt > 1.8) return;
+    for (let i = 0; i < n; i++) {
+      const a = hash(i + seed) * Math.PI * 2;
+      const sp = 260 + hash(i + seed + 40) * 820;
+      const life = 1.1 + hash(i + seed + 80) * 0.7;
+      if (dt > life) continue;
+      const x = ox + Math.cos(a) * sp * dt * (1 - 0.25 * dt);
+      const y = oy + Math.sin(a) * sp * dt * (1 - 0.25 * dt) + 700 * dt * dt;
+      const sz = 10 + hash(i + seed + 120) * 16;
+      ctx.save();
+      ctx.globalAlpha = 1 - dt / life;
+      ctx.translate(x, y); ctx.rotate(dt * (hash(i + seed + 7) - 0.5) * 12);
+      ctx.fillStyle = col(P.blocks[i % 4]);
+      rr(-sz / 2, -sz / 2, sz, sz, sz * 0.2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function ring(v, t0, x, y, maxR, color, dur = 0.7, width = 8) {
+    const p = (v - t0) / dur;
+    if (p < 0 || p > 1) return;
+    ctx.save();
+    ctx.strokeStyle = color; ctx.globalAlpha = 1 - p; ctx.lineWidth = width * (1 - p) + 1;
+    ctx.beginPath(); ctx.arc(x, y, maxR * eo3(p), 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawNumbers(l, v, P) {
+    const t0 = S.numbers + 0.15;
+    const p = eo3((v - t0) / 0.9);
+    const n = Math.round(1500 * p);
+    const x = W / 2;
+    const punch = 1 + 0.08 * Math.exp(-Math.max(0, v - (t0 + 0.9)) * 8);
+    ctx.save();
+    ctx.translate(x, 560); ctx.scale(punch, punch);
+    txt(String(n), 0, 0, { size: 420, family: MONO, align: 'center', color: '#fff', glow: 50, glowColor: col(P.accent) });
+    ctx.restore();
+    txt(T.levels.toUpperCase(), x, 690, { size: 96, align: 'center', color: col(P.blocks[3]), glow: 24 });
+    const k = eoBack((v - (S.numbers + 1.0)) / 0.35);
+    ctx.save();
+    ctx.translate(x, 840); ctx.scale(k, k);
+    txt(`∞  ${T.endless}`, 0, 0, { size: fit(`∞  ${T.endless}`, 1500, 88), weight: 600, align: 'center', color: '#fff', alpha: clamp01(k) });
+    ctx.restore();
+    ring(v, t0 + 0.9, x, 440, 600, col(P.accent, 0.8), 0.8);
+  }
+
+  function drawBadge(cx, cy, v, P) {
+    const dt = v - BADGE_AT;
+    if (dt < 0) return;
+    const k = eoBack(dt / 0.5);
+    const w = 760, h = 210;
+    ctx.save();
+    ctx.globalAlpha = clamp01(dt / 0.15);
+    ctx.translate(cx, cy + (1 - k) * 90); ctx.scale(lerp(0.85, 1, k), lerp(0.85, 1, k));
+    const glow = 36 + 14 * Math.sin(dt * 3.2);
+    rr(-w / 2, -h / 2, w, h, 36);
+    ctx.fillStyle = col(P.surface, 0.78); ctx.fill();
+    ctx.shadowColor = col(P.accent, 0.8); ctx.shadowBlur = glow;
+    ctx.strokeStyle = col(P.accent, 0.9); ctx.lineWidth = 4; ctx.stroke();
+    ctx.shadowBlur = 0;
+    // mark
+    const mx = -w / 2 + 120;
+    const rp = (dt * 0.9) % 1;
+    ctx.strokeStyle = col(P.accent, 0.7 * (1 - rp)); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(mx, 0, 46 * (0.55 + 0.6 * rp), 0, Math.PI * 2); ctx.stroke();
+    ctx.save();
+    ctx.translate(mx, 0); ctx.scale(3.4, 3.4);
+    ctx.shadowColor = col(P.accent, 0.9); ctx.shadowBlur = 10;
+    ctx.fillStyle = col(P.accent);
+    ctx.fill(new Path2D('M-5 -7.4v14.8a1 1 0 0 0 1.5.86l12.4-7.4a1 1 0 0 0 0-1.72L-3.5 -8.26A1 1 0 0 0 -5 -7.4z'));
+    ctx.restore();
+    txt(T.badge[0], mx + 90, -14, { size: 38, weight: 600, color: 'rgba(236,233,255,0.85)' });
+    txt(T.badge[1], mx + 90, 58, { size: 84, weight: 800, color: '#fff' });
+    ctx.restore();
+  }
+
+  function drawFinale(l, v, P) {
+    const cx = W / 2;
+    const t = v - S.finale;
+    // icon
+    const ik = eoBack((t - 0.1) / 0.5);
+    const iy = lerp(400, 250, ss(1.5, 2.1, v - S.finale));
+    ctx.save();
+    ctx.translate(cx, iy); ctx.scale(Math.max(0.001, ik), Math.max(0.001, ik));
+    ctx.shadowColor = col(P.accent, 0.9); ctx.shadowBlur = 60;
+    rr(-130, -130, 260, 260, 58); ctx.clip();
+    ctx.drawImage(icon, -130, -130, 260, 260);
+    ctx.restore();
+    ring(v, S.finale + 0.1, cx, iy, 520, col(P.accent, 0.9), 0.9, 10);
+    ring(v, S.finale + 0.25, cx, iy, 760, col(P.blocks[2], 0.8), 1.0, 6);
+    confetti(v, S.finale + 0.1, cx, iy, 70, 500, P);
+    // title
+    const tk = eoBack((t - 0.35) / 0.45);
+    const size = 190;
+    const w = measure('Cascade', size);
+    const ty = lerp(660, 585, ss(1.5, 2.1, t));
+    ctx.save();
+    ctx.translate(cx, ty - size * 0.35); ctx.scale(Math.max(0.001, tk), Math.max(0.001, tk)); ctx.translate(0, size * 0.35);
+    const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    grad.addColorStop(0, col(P.blocks[0])); grad.addColorStop(0.35, col(P.blocks[1]));
+    grad.addColorStop(0.7, col(P.blocks[2])); grad.addColorStop(1, col(P.blocks[3]));
+    ctx.shadowColor = col(P.accent, 0.8); ctx.shadowBlur = 50;
+    txt('Cascade', 0, 0, { size, align: 'center', color: grad });
+    ctx.restore();
+    txt(T.sub, cx, ty + 80, { size: 68, weight: 600, align: 'center', color: col(P.text, 0.92), alpha: eo3((t - 0.8) / 0.4) });
+    drawBadge(cx, 850, v, P);
+    confetti(v, BADGE_AT, cx, 850, 50, 900, P);
+    ring(v, BADGE_AT, cx, 850, 520, col(P.accent, 0.7), 0.8, 8);
+    txt(T.free, cx, 1012, { size: 34, weight: 600, align: 'center', color: col(P.text, 0.75), alpha: eo3((v - BADGE_AT - 0.5) / 0.5) });
+  }
+
+  // ------------------------------------------------------------------ overlays
+
+  const BOUNDS = [S.play, S.combo, S.bonus, S.style, S.numbers];
+
+  function drawWipes(v, P) {
+    for (const b of BOUNDS) {
+      const p = (v - (b - 0.06)) / 0.36;
+      if (p < 0 || p > 1) continue;
+      const x = lerp(-700, W + 700, eo3(p) * 0.6 + p * 0.4);
+      ctx.save();
+      ctx.globalAlpha = 0.85 * (1 - ss(0.6, 1, p));
+      ctx.fillStyle = col(P.accent);
+      ctx.beginPath();
+      ctx.moveTo(x - 260, 0); ctx.lineTo(x + 260, 0); ctx.lineTo(x + 60, H); ctx.lineTo(x - 460, H);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function flashAmount(v) {
+    let a = 0;
+    for (const s of SLAMS) a = Math.max(a, 0.22 * Math.exp(-Math.max(0, v - s) * 14) * (v >= s ? 1 : 0));
+    for (const sv of stageVs) if (v >= sv) a = Math.max(a, 0.5 * Math.exp(-(v - sv) * 9));
+    if (v >= comboFlashV) a = Math.max(a, 0.12 * comboFlashTier * Math.exp(-(v - comboFlashV) * 10));
+    if (v >= S.finale - 0.05) a = Math.max(a, 0.95 * Math.exp(-Math.max(0, v - S.finale + 0.05) * 6));
+    for (const p of POPS) if (v >= p) a = Math.max(a, 0.08 * Math.exp(-(v - p) * 12));
+    return a;
+  }
+
+  function shakeAmount(v) {
+    let a = 0;
+    for (const s of SLAMS) if (v >= s) a = Math.max(a, 20 * Math.exp(-(v - s) * 8));
+    if (v >= comboFlashV) a = Math.max(a, 6 * comboFlashTier * Math.exp(-(v - comboFlashV) * 6));
+    if (v >= S.finale) a = Math.max(a, 26 * Math.exp(-(v - S.finale) * 7));
+    return a;
+  }
+
+  // ------------------------------------------------------------------ frame
+
+  function drawFrame(v) {
+    advanceTo(v);
+    applyLook(v);
+    const P = look(v);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const amp = shakeAmount(v);
+    ctx.save();
+    ctx.translate(Math.sin(v * 91) * amp, Math.cos(v * 77) * amp);
+
+    drawBackground(v, P, Math.min(fieldX(v), W / 2 + 200 * (v > S.numbers ? 0 : 1)));
+    drawField(v, P);
+    if (v < S.play + 0.2) drawHook(v, P);
+    scene(v, S.play, S.combo, (l) => drawPlay(l, v, P));
+    scene(v, S.combo, S.bonus, (l) => drawCombo(l, v, P));
+    scene(v, S.bonus, S.style, (l) => drawBonus(l, v, P));
+    scene(v, S.style, S.numbers, (l) => drawStyle(l, v, P));
+    scene(v, S.numbers, S.finale, (l) => drawNumbers(l, v, P), 0.15, 0.25);
+    if (v >= S.finale) drawFinale(0, v, P);
+    ctx.restore();
+
+    // score chip while the left side shows something other than the score
+    if (v >= S.combo && v < S.numbers - 0.2) {
+      const a = Math.min(eo3((v - S.combo) / 0.4), 1 - ss(S.numbers - 0.4, S.numbers - 0.2, v));
+      ctx.save(); ctx.globalAlpha = a;
+      txt(T.score.toUpperCase(), 124, 92, { size: 26, weight: 700, family: MONO, color: col(P.text, 0.6) });
+      txt(fmt(st.score), 124 + measure(T.score.toUpperCase(), 26, 700, MONO) + 22, 92, { size: 44, family: MONO, color: C.scoreColor(st.score, st.time) });
+      ctx.restore();
+    }
+
+    drawWipes(v, P);
+    const f = flashAmount(v);
+    if (f > 0.005) { ctx.fillStyle = `rgba(255,255,255,${f})`; ctx.fillRect(0, 0, W, H); }
+
+    // vignette, intro fade-in, outro fade-out
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.05);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    const fade = 1 - ss(0, 0.25, v) + ss(DUR - 0.4, DUR, v);
+    if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade)})`; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // ------------------------------------------------------------------ boot
+
+  async function boot() {
+    const faces = [
+      new FontFace('Inter', 'url(../assets/fonts/inter_regular.ttf)', { weight: '400' }),
+      new FontFace('Inter', 'url(../assets/fonts/inter_semibold.ttf)', { weight: '600' }),
+      new FontFace('Inter', 'url(../assets/fonts/inter_extrabold.ttf)', { weight: '800' }),
+      new FontFace('JetBrains Mono', 'url(../assets/fonts/jetbrains_mono_bold.ttf)', { weight: '700' }),
+      new FontFace('JetBrains Mono', 'url(../assets/fonts/jetbrains_mono_extrabold.ttf)', { weight: '800' }),
+    ];
+    await Promise.all(faces.map((f) => f.load().then((x) => document.fonts.add(x))));
+    icon = new Image();
+    icon.src = '../assets/img/icon-512.png';
+    await icon.decode();
+
+    Math.random = simRng;
+    G = C.createGame(gc, {
+      bannerText: (tier, count) => ({ title: T.comboTitles[tier - 1], sub: T.blocksBanner(count) }),
+      onEvent: onGameEvent,
+    });
+    st = G._state;
+    // let the ResizeObserver callback run before the simulation starts, so it cannot draw in the middle of a step
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    window.__ready = true;
+  }
+
+  window.renderFrame = (i) => {
+    drawFrame(i / FPS);
+    return mc.toDataURL('image/jpeg', 0.95).slice(23);
+  };
+  window.getCues = () => {
+    const fixed = [];
+    SLAMS.forEach((v) => fixed.push({ v, k: 'slam' }));
+    BOUNDS.forEach((v) => fixed.push({ v: v - 0.06, k: 'wipe' }));
+    POPS.forEach((v, i) => fixed.push({ v, k: 'pop', n: i }));
+    THEME_AT.slice(1).forEach((v) => fixed.push({ v, k: 'theme' }));
+    fixed.push({ v: S.numbers + 0.15, k: 'count' }, { v: S.numbers + 1.05, k: 'hit' });
+    fixed.push({ v: S.finale, k: 'boom' }, { v: BADGE_AT, k: 'badge' });
+    return { dur: DUR, fps: FPS, cues: fixed.concat(cues) };
+  };
+  window.__info = () => ({ turn: st.turn, phase: st.phase, time: st.time, score: st.score, combo: st.combo, stageVs });
+  boot();
+})();
+</script>
+</body>
+</html>
