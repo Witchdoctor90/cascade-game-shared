@@ -61,6 +61,7 @@
       'block.bubble': 'Бульбашка',
       'closing.title': 'Скоро на Android',
       'closing.lead': '1500 рівнів, нескінченний режим і ланцюжки комбо. Cascade з’явиться в Google Play.',
+      'footer.privacy': 'Політика конфіденційності',
     },
     en: {
       'meta.title': 'Cascade: Break & Bounce',
@@ -105,6 +106,7 @@
       'block.bubble': 'Bubble',
       'closing.title': 'Coming to Android',
       'closing.lead': '1,500 levels, endless mode and chain combos. Cascade is on its way to Google Play.',
+      'footer.privacy': 'Privacy policy',
     },
   };
 

@@ -478,7 +478,25 @@ input[type='range']::-moz-range-thumb {
   padding: 1.5rem var(--gutter) 2.5rem;
   color: var(--muted);
   font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
 }
+
+/* privacy page */
+
+.prose-wrap { max-width: 46rem; }
+.prose { color: color-mix(in srgb, var(--text) 88%, transparent); line-height: 1.7; }
+.prose[hidden] { display: none; }
+.prose h1 { max-width: none; margin: 0 0 1.5rem; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.08; text-shadow: none; }
+.prose h2 { max-width: none; margin: 2.25rem 0 0.6rem; font-size: 1.45rem; letter-spacing: -0.015em; }
+.prose h3 { margin: 1.5rem 0 0.4rem; font-size: 1.1rem; font-weight: 800; }
+.prose p, .prose ul { margin: 0 0 1rem; }
+.prose ul { padding-left: 1.25rem; }
+.prose li { margin-bottom: 0.35rem; }
+.prose a, .foot a { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent) 80%, transparent); text-underline-offset: 3px; }
+.prose a:hover, .foot a:hover { text-decoration-color: var(--text); }
+.prose strong { color: var(--text); }
 
 /* ---------------------------------------------------------------- small screens */
 
