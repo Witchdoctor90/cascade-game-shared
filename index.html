@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cascade: Ламай і відбивай</title>
+  <meta name="description" content="Неонова аркада для Android: цілься, запускай кульки, ламай блоки й збирай комбо. 1500 рівнів і нескінченний режим. Скоро в Google Play.">
+  <meta name="theme-color" content="#110F1C">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Cascade: Ламай і відбивай">
+  <meta property="og:description" content="Неонова аркада для Android: кульки, блоки й ланцюжки комбо. Скоро в Google Play.">
+  <meta property="og:image" content="https://witchdoctor90.github.io/cascade-game-shared/assets/img/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/img/icon-64.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/img/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/img/icon-180.png">
+  <link rel="preload" href="assets/fonts/inter_extrabold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <header class="top">
+    <a class="brand" href="#top" aria-label="Cascade">
+      <img src="assets/img/icon-64.png" width="32" height="32" alt="">
+      <span>Cascade</span>
+    </a>
+    <div class="lang" role="group" aria-label="Мова / Language">
+      <button type="button" data-lang="uk" aria-pressed="true">UA</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <h1>
+          <span data-i18n="hero.l1">Цілься.</span>
+          <span data-i18n="hero.l2">Запускай.</span>
+          <span data-i18n="hero.l3">Ламай усе.</span>
+        </h1>
+        <p class="lead" data-i18n="hero.lead">Неонова аркада для Android. Кульки відлітають від стін і блоків, поле повільно опускається, а ти збираєш ланцюжки. Спробуй просто тут: наведи на поле й клікни.</p>
+        <play-badge></play-badge>
+        <p class="fine" data-i18n="hero.fine">Android 7.0 і новіший. Українська та англійська мови.</p>
+      </div>
+
+      <div class="stage">
+        <div class="frame">
+          <canvas id="game" tabindex="0" role="img"
+                  data-i18n-attr="aria-label:game.label"
+                  aria-label="Демо гри Cascade. Клікніть, щоб вистрелити кульками. Стрілки змінюють кут, пробіл стріляє."></canvas>
+        </div>
+        <div class="hud">
+          <div class="score"><span data-i18n="game.score">Очки</span> <output id="score" aria-live="off">0</output></div>
+          <ul class="words" aria-hidden="true">
+            <li data-word="break" data-i18n="word.break">Ламай</li>
+            <li data-word="bounce" data-i18n="word.bounce">Відбивай</li>
+            <li data-word="chain" data-i18n="word.chain">Ланцюжки</li>
+          </ul>
+          <button type="button" id="fire" class="btn" data-i18n="game.fire">Вистрелити</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec bonuses" id="bonuses">
+      <div class="head">
+        <h2 data-i18n="bonus.title">Що лежить на полі</h2>
+        <p data-i18n="bonus.lead">Кульки та монети збираються самі, коли кулька пролітає поруч. Лазер і бомба розчищають шлях.</p>
+      </div>
+      <ul class="bonus-list">
+        <li class="bonus" data-kind="ball">
+          <svg viewBox="0 0 96 96" aria-hidden="true">
+            <circle class="ring" cx="48" cy="48" r="22"/>
+            <circle class="core" cx="48" cy="48" r="7"/>
+            <text class="plus" x="48" y="30" text-anchor="middle">+1</text>
+          </svg>
+          <h3 data-i18n="bonus.ball.t">Кулька</h3>
+          <p data-i18n="bonus.ball.d">Ще одна кулька з наступного ходу.</p>
+        </li>
+        <li class="bonus" data-kind="coin">
+          <svg viewBox="0 0 96 96" aria-hidden="true">
+            <ellipse class="coin-outer" cx="48" cy="48" rx="26" ry="26"/>
+            <ellipse class="coin-inner" cx="48" cy="48" rx="16" ry="16"/>
+          </svg>
+          <h3 data-i18n="bonus.coin.t">Монета</h3>
+          <p data-i18n="bonus.coin.d">Іде до гаманця. Витратиш у магазині.</p>
+        </li>
+        <li class="bonus" data-kind="laser">
+          <svg viewBox="0 0 96 96" aria-hidden="true">
+            <g class="row">
+              <rect x="6" y="36" width="16" height="16" rx="3"/>
+              <rect x="24" y="36" width="16" height="16" rx="3"/>
+              <rect x="42" y="36" width="16" height="16" rx="3"/>
+              <rect x="60" y="36" width="16" height="16" rx="3"/>
+              <rect x="78" y="36" width="12" height="16" rx="3"/>
+            </g>
+            <rect class="beam" x="0" y="42" width="96" height="4" rx="2"/>
+          </svg>
+          <h3 data-i18n="bonus.laser.t">Лазер</h3>
+          <p data-i18n="bonus.laser.d">Б'є по всіх блоках ряду або стовпця.</p>
+        </li>
+        <li class="bonus" data-kind="bomb">
+          <svg viewBox="0 0 96 96" aria-hidden="true">
+            <g class="around">
+              <rect x="20" y="20" width="16" height="16" rx="3"/>
+              <rect x="40" y="20" width="16" height="16" rx="3"/>
+              <rect x="60" y="20" width="16" height="16" rx="3"/>
+              <rect x="20" y="40" width="16" height="16" rx="3"/>
+              <rect x="60" y="40" width="16" height="16" rx="3"/>
+              <rect x="20" y="60" width="16" height="16" rx="3"/>
+              <rect x="40" y="60" width="16" height="16" rx="3"/>
+              <rect x="60" y="60" width="16" height="16" rx="3"/>
+            </g>
+            <circle class="bomb" cx="48" cy="49" r="9"/>
+            <circle class="spark" cx="54" cy="38" r="3"/>
+            <circle class="blast" cx="48" cy="48" r="10"/>
+          </svg>
+          <h3 data-i18n="bonus.bomb.t">Бомба</h3>
+          <p data-i18n="bonus.bomb.d">Руйнує блоки в зоні 3×3.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="sec combo" id="combo">
+      <div class="head">
+        <h2 data-i18n="combo.title">Чим довший ланцюжок, тим дорожчий кожен блок</h2>
+        <p data-i18n="combo.lead">Блок номер N за один хід дає 10 × N очок. Перетягни повзунок і подивись, що виходить.</p>
+        <div class="range">
+          <label for="combo-range"><span data-i18n="combo.label">Блоків за хід</span> <output id="combo-n">12</output></label>
+          <input id="combo-range" type="range" min="1" max="100" value="12">
+        </div>
+      </div>
+      <div class="readout glow" id="readout">
+        <div class="banner" id="combo-banner">Неймовірно!</div>
+        <div class="sub" id="combo-sub">12 блоків знищено</div>
+        <div class="points"><output id="combo-points">390</output> <span data-i18n="combo.points">очок</span></div>
+        <p class="formula" id="combo-formula">Останній блок: 10 × 12 = 120</p>
+      </div>
+    </section>
+
+    <section class="sec style" id="style">
+      <div class="head">
+        <h2 data-i18n="style.title">Зроби поле своїм</h2>
+        <p data-i18n="style.lead">Чотири теми, п'ять стилів блоків і п'ять стилів кульок. Усе малюється векторно, тому лишається чітким на будь-якому екрані. Обери тему, і зміниться вся сторінка разом із грою нагорі.</p>
+        <fieldset class="group">
+          <legend data-i18n="style.themes">Тема</legend>
+          <div class="choices" id="themes"></div>
+        </fieldset>
+        <fieldset class="group">
+          <legend data-i18n="style.blocks">Блоки</legend>
+          <div class="choices" id="blocks"></div>
+        </fieldset>
+      </div>
+      <div class="preview glow">
+        <canvas id="preview" aria-hidden="true"></canvas>
+      </div>
+    </section>
+
+    <section class="sec closing">
+      <h2 data-i18n="closing.title">Скоро на Android</h2>
+      <p data-i18n="closing.lead">1500 рівнів, нескінченний режим і ланцюжки комбо. Cascade з'явиться в Google Play.</p>
+      <play-badge></play-badge>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>© 2026 Cascade</span>
+  </footer>
+
+  <script src="shared/play-badge.js" defer></script>
+  <script src="assets/js/cascade.js" defer></script>
+  <script src="assets/js/site.js" defer></script>
+</body>
+</html>
