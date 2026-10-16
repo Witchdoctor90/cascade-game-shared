@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cascade store screenshots</title>
+<style>html,body{margin:0;background:#000}#m{display:block;width:540px;height:960px}#g{position:absolute;left:-5000px;top:0;width:600px}</style>
+</head>
+<body>
+<canvas id="m" width="1080" height="1920"></canvas>
+<canvas id="g"></canvas>
+<script src="../assets/js/cascade.js"></script>
+<script src="stage.js"></script>
+<script>
+/* Play Store screenshots, 1080x1920. Same game, same seed and staging as the video (see scene.html).
+   Open shots.html?lang=uk|en and call window.shot(i) for i = 0..5 in order. */
+(() => {
+  'use strict';
+  const C = window.Cascade;
+  const W = 1080, H = 1920, STEP = 1 / 120, SEED = 136;
+  const LANG = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'uk';
+  const ukBlocks = (n) => 'блоків';
+  const TEXT = {
+    uk: {
+      combo: ['Непогано!', 'Чудово!', 'Неймовірно!', 'Шалено!', 'ЛЕГЕНДАРНО!'],
+      banner: (n) => `${n} блок${n % 10 === 1 && n % 100 !== 11 ? '' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 'и' : 'ів'} знищено`,
+      shots: [
+        { lines: ['Цілься.', 'Запускай.', 'Ламай усе.'], sub: 'Неонова аркада для Android', colors: ['#4FC3F7', '#FF4081', '#FFD54F'] },
+        { lines: ['Збирай величезні', 'комбо'], sub: 'Чим довший ланцюжок, тим дорожчий кожен блок', badge: 'combo' },
+        { lines: ['Лазер, бомба', 'та бонуси'], sub: 'Розчищай шлях і збирай монети' },
+        { lines: ['Зроби поле', 'своїм'], sub: 'Чотири візуальні теми' },
+        { lines: ['Стилі блоків', 'і кульок'], sub: 'П’ять стилів блоків і п’ять стилів кульок' },
+        { lines: ['1500 рівнів'], sub: 'і нескінченний режим', badge: '∞' },
+      ],
+    },
+    en: {
+      combo: ['Nice!', 'Great!', 'Awesome!', 'Incredible!', 'LEGENDARY!'],
+      banner: (n) => `${n} ${n === 1 ? 'block' : 'blocks'} destroyed`,
+      shots: [
+        { lines: ['Aim.', 'Launch.', 'Break everything.'], sub: 'A neon arcade game for Android', colors: ['#4FC3F7', '#FF4081', '#FFD54F'] },
+        { lines: ['Chain huge', 'combos'], sub: 'The longer the chain, the more each block is worth', badge: 'combo' },
+        { lines: ['Lasers, bombs', 'and bonuses'], sub: 'Clear the way and collect coins' },
+        { lines: ['Make the field', 'yours'], sub: 'Four visual themes' },
+        { lines: ['Block and', 'ball styles'], sub: 'Five block styles and five ball styles' },
+        { lines: ['1,500 levels'], sub: 'and endless mode', badge: '∞' },
+      ],
+    },
+  };
+  const T = TEXT[LANG];
+  // game time, theme and skin per screenshot (game time only moves forward)
+  const PLAN = [
+    { g: 2.4, look: ['neon', 'rounded'] },
+    { g: 16.3, look: ['neon', 'rounded'] },
+    { g: 25.0, look: ['neon', 'rounded'] },
+    { g: 29.8, look: ['ocean', 'gem'] },
+    { g: 31.7, look: ['sunset', 'bubble'] },
+    { g: 36.0, look: ['matrix', 'outline'] },
+  ];
+
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const hash = (i) => { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+  const col = (c, a = 1) => C.rgba(c, a);
+  function mulberry(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const simRng = mulberry(SEED), drawRng = mulberry(7);
+  const mc = document.getElementById('m'), ctx = mc.getContext('2d'), gc = document.getElementById('g');
+  const SANS = 'Inter, sans-serif', MONO = '"JetBrains Mono", monospace';
+  let G, st, steps = 0, setTurn = 0;
+
+  function advanceTo(g) {
+    const target = Math.floor(g / STEP + 1e-9);
+    while (steps < target) {
+      if (st.phase === 'ready' && setTurn !== st.turn) { setTurn = st.turn; PromoStage.onReady(st); }
+      Math.random = simRng; G._step(STEP); steps++;
+    }
+  }
+  const rr = (x, y, w, h, r) => C.roundRect(ctx, x, y, w, h, r);
+  function txt(s, x, y, o = {}) {
+    const { size = 80, weight = 800, family = SANS, color = '#fff', align = 'center', glow = 0, glowColor = color, alpha = 1 } = o;
+    ctx.save(); ctx.font = `${weight} ${size}px ${family}`; ctx.textAlign = align; ctx.globalAlpha = alpha;
+    if (glow) { ctx.shadowColor = glowColor; ctx.shadowBlur = glow; }
+    ctx.fillStyle = color; ctx.fillText(s, x, y); ctx.restore();
+  }
+  const measure = (s, size, weight = 800) => { ctx.save(); ctx.font = `${weight} ${size}px ${SANS}`; const w = ctx.measureText(s).width; ctx.restore(); return w; };
+
+  function render(i) {
+    const plan = PLAN[i], spec = T.shots[i];
+    advanceTo(plan.g);
+    Math.random = drawRng; G.setPalette(plan.look[0]); G.setSkin(plan.look[1]); G._draw(); Math.random = simRng;
+    const P = C.PALETTES[plan.look[0]];
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, col(P.background)); bg.addColorStop(1, col(C.mix(P.background, [0, 0, 0], 0.5)));
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    let r = ctx.createRadialGradient(W / 2, 1200, 0, W / 2, 1200, 1100);
+    r.addColorStop(0, col(P.accent, 0.34)); r.addColorStop(1, col(P.accent, 0));
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    r = ctx.createRadialGradient(W / 2, 120, 0, W / 2, 120, 800);
+    r.addColorStop(0, col(P.blockColors[2], 0.16)); r.addColorStop(1, col(P.blockColors[2], 0));
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    for (let k = 0; k < 34; k++) {
+      const sz = 14 + hash(k + 3) * 38, x = hash(k) * W, y = hash(k + 5) * H;
+      ctx.save(); ctx.globalAlpha = 0.07 + hash(k + 11) * 0.1; ctx.translate(x, y); ctx.rotate(hash(k + 2) * 3);
+      ctx.fillStyle = col(P.blockColors[k % 4]); rr(-sz / 2, -sz / 2, sz, sz, sz * 0.2); ctx.fill(); ctx.restore();
+    }
+
+    // field
+    const FW = 800, FH = (FW * (C.ROWS + 0.6)) / C.COLS, fx = W / 2, fy = 575 + FH / 2;
+    ctx.save(); ctx.translate(fx, fy);
+    ctx.shadowColor = col(P.accent, 0.65); ctx.shadowBlur = 90;
+    ctx.drawImage(gc, -FW / 2, -FH / 2, FW, FH);
+    ctx.shadowBlur = 0; rr(-FW / 2, -FH / 2, FW, FH, 26);
+    ctx.strokeStyle = col(P.accent, 0.75); ctx.lineWidth = 5; ctx.stroke(); ctx.restore();
+
+    // caption
+    const lines = spec.lines;
+    let size = 132;
+    for (const l of lines) { const w = measure(l, size); if (w > 940) size = size * 940 / w; }
+    size = Math.min(size, lines.length === 3 ? 118 : 132);
+    const lh = size * 1.08, subSize = 44;
+    const subLines = [spec.sub];
+    if (measure(spec.sub, subSize, 600) > 940) {
+      const words = spec.sub.split(' ');
+      let best = 0, bestMax = 1e9;
+      for (let k = 1; k < words.length; k++) {
+        const m = Math.max(measure(words.slice(0, k).join(' '), subSize, 600), measure(words.slice(k).join(' '), subSize, 600));
+        if (m < bestMax) { bestMax = m; best = k; }
+      }
+      subLines.splice(0, 1, words.slice(0, best).join(' '), words.slice(best).join(' '));
+    }
+    const blockH = lines.length * lh + 26 + subLines.length * subSize * 1.25;
+    let y = 70 + (470 - blockH) / 2 + size * 0.86;
+    lines.forEach((l, k) => {
+      txt(l, W / 2, y, { size, color: spec.colors ? spec.colors[k] : '#fff', glow: spec.colors ? 44 : 26, glowColor: spec.colors ? spec.colors[k] : col(P.accent) });
+      y += lh;
+    });
+    subLines.forEach((l, k) => txt(l, W / 2, y - lh + 26 + subSize * 0.9 + 6 + k * subSize * 1.25, { size: subSize, weight: 600, color: col(P.hudText, 0.85) }));
+
+    // badge pill on the field's top-right corner
+    if (spec.badge) {
+      const label = spec.badge === 'combo' ? `×${st.combo}` : spec.badge;
+      const bx = fx + FW / 2 - 30, by = 575 + 40;
+      ctx.save(); ctx.font = `800 100px ${MONO}`; const bw = ctx.measureText(label).width + 70; ctx.restore();
+      ctx.save(); ctx.translate(bx - bw / 2, by + 30);
+      rr(-bw / 2, -75, bw, 150, 40); ctx.fillStyle = col(P.surface, 0.92); ctx.fill();
+      ctx.shadowColor = col(P.accent, 0.9); ctx.shadowBlur = 36; ctx.strokeStyle = col(P.accent); ctx.lineWidth = 5; ctx.stroke(); ctx.shadowBlur = 0;
+      txt(label, 0, 34, { size: 100, family: MONO, glow: 20, glowColor: col(P.accent) });
+      ctx.restore();
+    }
+    return mc.toDataURL('image/png').slice(22);
+  }
+
+  async function boot() {
+    const faces = [['Inter', 'inter_semibold.ttf', 600], ['Inter', 'inter_extrabold.ttf', 800], ['JetBrains Mono', 'jetbrains_mono_extrabold.ttf', 800]]
+      .map(([f, file, w]) => new FontFace(f, `url(../assets/fonts/${file})`, { weight: String(w) }));
+    await Promise.all(faces.map((f) => f.load().then((x) => document.fonts.add(x))));
+    Math.random = simRng;
+    G = C.createGame(gc, { bannerText: (tier, count) => ({ title: T.combo[tier - 1], sub: T.banner(count) }) });
+    st = G._state;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    window.__ready = true;
+  }
+  window.shot = render;
+  boot();
+})();
+</script>
+</body>
+</html>
