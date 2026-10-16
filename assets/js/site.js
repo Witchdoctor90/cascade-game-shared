@@ -452,7 +452,10 @@
   function applyLang(next) {
     lang = next;
     root.lang = next;
-    $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    $$('[data-i18n]').forEach((el) => {
+      const text = I18N[lang][el.dataset.i18n];
+      if (text !== undefined) el.textContent = text; // a missing key keeps the text written in the HTML
+    });
     $$('[data-i18n-attr]').forEach((el) => {
       const [attr, key] = el.dataset.i18nAttr.split(':');
       el.setAttribute(attr, t(key));
