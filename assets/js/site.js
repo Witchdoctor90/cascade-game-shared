@@ -20,12 +20,17 @@
   const I18N = {
     uk: {
       'meta.title': 'Cascade: Ламай і відбивай',
-      'meta.desc': 'Неонова аркада для Android: цілься, запускай кульки, ламай блоки й збирай комбо. 1500 рівнів і нескінченний режим. Скоро в Google Play.',
+      'meta.desc': 'Неонова аркада для Android: цілься, запускай кульки, ламай блоки й збирай комбо. 1500 рівнів і нескінченний режим. Закрите тестування в Google Play.',
       'hero.l1': 'Цілься.',
       'hero.l2': 'Запускай.',
       'hero.l3': 'Ламай усе.',
       'hero.lead': 'Неонова аркада для Android. Кульки відлітають від стін і блоків, поле повільно опускається, а ти збираєш ланцюжки. Спробуй просто тут: клікни по полю або торкнись його.',
       'hero.fine': 'Android 7.0 і новіший. Українська та англійська мови.',
+      'hero.test': 'Закрите тестування: доступ за запрошенням.',
+      'hero.request': 'Запросити доступ',
+      'access.btn': 'Запросити доступ',
+      'access.subject': 'Cascade: запит доступу до закритого тестування',
+      'access.body': 'Доброго дня! Прошу надати доступ до закритого тестування Cascade.\n\nАдреса Gmail, яку я використовую в Google Play: ',
       'game.label': 'Демо гри Cascade. Клікніть, щоб вистрелити кульками. Стрілки змінюють кут, пробіл стріляє.',
       'game.score': 'Очки',
       'game.fire': 'Вистрелити',
@@ -59,18 +64,23 @@
       'block.outline': 'Контур',
       'block.gem': 'Самоцвіт',
       'block.bubble': 'Бульбашка',
-      'closing.title': 'Скоро на Android',
-      'closing.lead': '1500 рівнів, нескінченний режим і ланцюжки комбо. Cascade з’явиться в Google Play.',
+      'closing.title': 'Закрите тестування',
+      'closing.lead': 'Cascade зараз у закритому тестуванні в Google Play. Щоб долучитися, напишіть нам зі своєю адресою Gmail, і ми додамо вас до тестувальників.',
       'footer.privacy': 'Політика конфіденційності',
     },
     en: {
       'meta.title': 'Cascade: Break & Bounce',
-      'meta.desc': 'A neon arcade for Android: aim, launch balls, smash blocks and chain combos. 1,500 levels and an endless mode. Coming soon to Google Play.',
+      'meta.desc': 'A neon arcade for Android: aim, launch balls, smash blocks and chain combos. 1,500 levels and an endless mode. Closed testing on Google Play.',
       'hero.l1': 'Aim.',
       'hero.l2': 'Launch.',
       'hero.l3': 'Break everything.',
       'hero.lead': 'A neon arcade for Android. Balls ricochet off walls and blocks, the field creeps down, and you chain big combos. Try it right here: click or tap the field.',
       'hero.fine': 'Android 7.0 or newer. English and Ukrainian.',
+      'hero.test': 'Closed testing: access by invitation.',
+      'hero.request': 'Request access',
+      'access.btn': 'Request access',
+      'access.subject': 'Cascade: closed testing access request',
+      'access.body': 'Hello! I would like to request access to the Cascade closed test.\n\nThe Gmail address I use in Google Play: ',
       'game.label': 'Cascade demo. Click to fire the balls. Arrow keys change the angle, Space fires.',
       'game.score': 'Score',
       'game.fire': 'Fire',
@@ -104,8 +114,8 @@
       'block.outline': 'Outline',
       'block.gem': 'Gem',
       'block.bubble': 'Bubble',
-      'closing.title': 'Coming to Android',
-      'closing.lead': '1,500 levels, endless mode and chain combos. Cascade is on its way to Google Play.',
+      'closing.title': 'Closed testing',
+      'closing.lead': 'Cascade is currently in closed testing on Google Play. To join, email us the Gmail address you use in Google Play and we will add you to the testers.',
       'footer.privacy': 'Privacy policy',
     },
   };
@@ -469,6 +479,8 @@
     renderChoices();
     renderCombo();
     if (game) $('#score').textContent = fmt(game.score);
+    const access = $('#access-btn');
+    if (access) access.href = `mailto:mrvnalexandr@gmail.com?subject=${encodeURIComponent(t('access.subject'))}&body=${encodeURIComponent(t('access.body'))}`;
     store.set('cascade.lang', next);
   }
 

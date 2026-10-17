@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cascade: Ламай і відбивай</title>
-  <meta name="description" content="Неонова аркада для Android: цілься, запускай кульки, ламай блоки й збирай комбо. 1500 рівнів і нескінченний режим. Скоро в Google Play.">
+  <meta name="description" content="Неонова аркада для Android: цілься, запускай кульки, ламай блоки й збирай комбо. 1500 рівнів і нескінченний режим. Закрите тестування в Google Play.">
   <meta name="theme-color" content="#110F1C">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Cascade: Ламай і відбивай">
-  <meta property="og:description" content="Неонова аркада для Android: кульки, блоки й ланцюжки комбо. Скоро в Google Play.">
+  <meta property="og:description" content="Неонова аркада для Android: кульки, блоки й ланцюжки комбо. Закрите тестування в Google Play.">
   <meta property="og:image" content="https://witchdoctor90.github.io/cascade-game-shared/assets/img/og.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/png" sizes="64x64" href="assets/img/icon-64.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/img/icon-192.png">
   <link rel="apple-touch-icon" href="assets/img/icon-180.png">
   <link rel="preload" href="assets/fonts/inter_extrabold.ttf" as="font" type="font/ttf" crossorigin>
-  <link rel="stylesheet" href="assets/css/site.css?v=2">
+  <link rel="stylesheet" href="assets/css/site.css?v=3">
 </head>
 <body>
   <div class="backdrop" aria-hidden="true"></div>
@@ -40,7 +40,8 @@
           <span data-i18n="hero.l3">Ламай усе.</span>
         </h1>
         <p class="lead" data-i18n="hero.lead">Неонова аркада для Android. Кульки відлітають від стін і блоків, поле повільно опускається, а ти збираєш ланцюжки. Спробуй просто тут: наведи на поле й клікни.</p>
-        <play-badge></play-badge>
+        <play-badge live href="https://play.google.com/store/apps/details?id=com.shadovvdev.cascade"></play-badge>
+        <p class="fine"><span data-i18n="hero.test">Закрите тестування: доступ за запрошенням.</span> <a href="#access" data-i18n="hero.request">Запросити доступ</a></p>
         <p class="fine" data-i18n="hero.fine">Android 7.0 і новіший. Українська та англійська мови.</p>
       </div>
 
@@ -156,10 +157,13 @@
       </div>
     </section>
 
-    <section class="sec closing">
-      <h2 data-i18n="closing.title">Скоро на Android</h2>
-      <p data-i18n="closing.lead">1500 рівнів, нескінченний режим і ланцюжки комбо. Cascade з'явиться в Google Play.</p>
-      <play-badge></play-badge>
+    <section class="sec closing" id="access">
+      <h2 data-i18n="closing.title">Закрите тестування</h2>
+      <p data-i18n="closing.lead">Cascade зараз у закритому тестуванні в Google Play. Щоб долучитися, напишіть нам зі своєю адресою Gmail, і ми додамо вас до тестувальників.</p>
+      <div class="closing-cta">
+        <play-badge live href="https://play.google.com/store/apps/details?id=com.shadovvdev.cascade"></play-badge>
+        <a class="btn" id="access-btn" href="mailto:mrvnalexandr@gmail.com" data-i18n="access.btn">Запросити доступ</a>
+      </div>
     </section>
   </main>
 
@@ -168,8 +172,8 @@
     <a href="privacy/" data-i18n="footer.privacy">Політика конфіденційності</a>
   </footer>
 
-  <script src="shared/play-badge.js?v=2" defer></script>
-  <script src="assets/js/cascade.js?v=2" defer></script>
-  <script src="assets/js/site.js?v=2" defer></script>
+  <script src="shared/play-badge.js?v=3" defer></script>
+  <script src="assets/js/cascade.js?v=3" defer></script>
+  <script src="assets/js/site.js?v=3" defer></script>
 </body>
 </html>

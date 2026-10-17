@@ -251,6 +251,7 @@ play-badge {
 
 .btn:hover { background: color-mix(in srgb, var(--accent) 32%, transparent); box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 50%, transparent); }
 .btn:active { transform: translateY(1px); }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* ---------------------------------------------------------------- sections */
 
@@ -471,6 +472,8 @@ input[type='range']::-moz-range-thumb {
 
 .closing { padding-bottom: clamp(4rem, 9vw, 8rem); }
 .closing p { max-width: 34rem; margin: 0 0 1.8rem; color: color-mix(in srgb, var(--text) 80%, transparent); }
+.closing-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.25rem; }
+.fine a { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent) 80%, transparent); text-underline-offset: 3px; }
 
 .foot {
   max-width: var(--page);
